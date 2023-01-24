@@ -69,6 +69,7 @@ private:
     Eigen::Affine3f transStartInverse;
 
     pcl::PointCloud<PointXYZIRT>::Ptr laserCloudIn;
+    pcl::PointCloud<PointType>::Ptr laserCloudIn_no_ring;
     pcl::PointCloud<PointType>::Ptr   fullCloud;
     pcl::PointCloud<PointType>::Ptr   extractedCloud;
 
@@ -106,6 +107,8 @@ public:
     void allocateMemory()
     {
         laserCloudIn.reset(new pcl::PointCloud<PointXYZIRT>());
+        laserCloudIn_no_ring.reset(new pcl::PointCloud<PointType>());
+        
         fullCloud.reset(new pcl::PointCloud<PointType>());
         extractedCloud.reset(new pcl::PointCloud<PointType>());
 
@@ -123,6 +126,7 @@ public:
     void resetParameters()
     {
         laserCloudIn->clear();
+        laserCloudIn_no_ring->clear();
         extractedCloud->clear();
         // reset range matrix for range image projection
         rangeMat = cv::Mat(N_SCAN, Horizon_SCAN, CV_32F, cv::Scalar::all(FLT_MAX));
@@ -208,7 +212,34 @@ public:
         }
 
         // convert cloud
-        pcl::fromROSMsg(currentCloudMsg, *laserCloudIn);
+        // pcl::fromROSMsg(currentCloudMsg, *laserCloudIn);
+    
+        /***** ydd add *****/
+        pcl::fromROSMsg(currentCloudMsg, *laserCloudIn_no_ring);
+
+        int cloudSizeNoring = laserCloudIn_no_ring->points.size();
+        laserCloudIn->points.resize(laserCloudIn_no_ring->points.size());
+        // ROS_ERROR(" P 111111, cloudSizeNoring is %d",cloudSizeNoring);
+        // range image projection
+        for (int i = 0; i < cloudSizeNoring; ++i) {
+            // PointXYZIRT thisPoint;
+            auto & lidar_pt = laserCloudIn->points[i];
+            // ROS_ERROR(" P 222222 11");
+            lidar_pt.x = laserCloudIn_no_ring->points[i].x;
+            lidar_pt.y = laserCloudIn_no_ring->points[i].y;
+            lidar_pt.z = laserCloudIn_no_ring->points[i].z;
+            // ROS_ERROR(" P 222222 22");
+            lidar_pt.intensity = laserCloudIn_no_ring->points[i].intensity;
+            // ROS_ERROR(" P 333333");
+            float verticalAngle = atan2(lidar_pt.z, sqrt(lidar_pt.x * lidar_pt.x + lidar_pt.y * lidar_pt.y)) * 180 / M_PI;
+            uint16_t rowIdn = static_cast<uint16_t>((verticalAngle + 15.01) / 1.0);
+            // ROS_ERROR(" P 444444: rowIdn is %d", rowIdn);
+
+            lidar_pt.ring = rowIdn;
+            lidar_pt.time = timeScanCur;
+        }
+
+        /********************************/
 
         // check dense flag
         if (laserCloudIn->is_dense == false)
@@ -218,40 +249,42 @@ public:
         }
 
         // check ring channel
-        static int ringFlag = 0;
-        if (ringFlag == 0)
-        {
-            ringFlag = -1;
-            for (int i = 0; i < (int)currentCloudMsg.fields.size(); ++i)
-            {
-                if (currentCloudMsg.fields[i].name == "ring")
-                {
-                    ringFlag = 1;
-                    break;
-                }
-            }
-            if (ringFlag == -1)
-            {
-                ROS_ERROR("Point cloud ring channel not available, please configure your point cloud data!");
-                ros::shutdown();
-            }
-        }   
+        static int ringFlag = 1;
+        // static int ringFlag = 0;
+        // if (ringFlag == 0)
+        // {
+        //     ringFlag = -1;
+        //     for (int i = 0; i < (int)currentCloudMsg.fields.size(); ++i)
+        //     {
+        //         if (currentCloudMsg.fields[i].name == "ring")
+        //         {
+        //             ringFlag = 1;
+        //             break;
+        //         }
+        //     }
+        //     if (ringFlag == -1)
+        //     {
+        //         ROS_ERROR("Point cloud ring channel not available, please configure your point cloud data!");
+        //         ros::shutdown();
+        //     }
+        // }   
 
         // check point time
-        if (deskewFlag == 0)
-        {
-            deskewFlag = -1;
-            for (int i = 0; i < (int)currentCloudMsg.fields.size(); ++i)
-            {
-                if (currentCloudMsg.fields[i].name == timeField)
-                {
-                    deskewFlag = 1;
-                    break;
-                }
-            }
-            if (deskewFlag == -1)
-                ROS_WARN("Point cloud timestamp not available, deskew function disabled, system will drift significantly!");
-        }
+        deskewFlag = 1;
+        // if (deskewFlag == 0)
+        // {
+        //     deskewFlag = -1;
+        //     for (int i = 0; i < (int)currentCloudMsg.fields.size(); ++i)
+        //     {
+        //         if (currentCloudMsg.fields[i].name == timeField)
+        //         {
+        //             deskewFlag = 1;
+        //             break;
+        //         }
+        //     }
+        //     if (deskewFlag == -1)
+        //         ROS_WARN("Point cloud timestamp not available, deskew function disabled, system will drift significantly!");
+        // }
 
         return true;
     }
@@ -271,6 +304,8 @@ public:
         imuDeskewInfo();
 
         odomDeskewInfo();
+
+        //  ROS_ERROR(" S 222222");
 
         return true;
     }
@@ -545,6 +580,7 @@ public:
             int index = columnIdn  + rowIdn * Horizon_SCAN;
             fullCloud->points[index] = thisPoint;
         }
+            //  ROS_ERROR(" S 333333");
     }
 
     void cloudExtraction()
@@ -571,6 +607,7 @@ public:
             }
             cloudInfo.endRingIndex[i] = count -1 - 5;//gc: the end index of every ring
         }
+        // ROS_ERROR(" S 444444");
     }
     
     void publishClouds()
@@ -578,6 +615,7 @@ public:
         cloudInfo.header = cloudHeader;
         cloudInfo.cloud_deskewed  = publishCloud(&pubExtractedCloud, extractedCloud, cloudHeader.stamp, "base_link");
         pubLaserCloudInfo.publish(cloudInfo);
+        // ROS_ERROR(" S 555555");
     }
 };
 

@@ -27,10 +27,10 @@
     </node>
     
     <!-- Parameters -->
-    <rosparam file="$(find lio_sam)/config/params.yaml" command="load" />
+    <rosparam file="$(find lio_sam)/config/params_yunyingche.yaml" command="load" />
 
     <!--- LOAM -->
-    <include file="$(find lio_sam)/launch/include/module_relocolize.launch" />
+    <include file="$(find lio_sam)/launch/include/module_relocolize_yunyingche.launch" />
 
     <!--- Robot State TF -->
     <include file="$(find lio_sam)/launch/include/module_robot_state_publisher.launch" />

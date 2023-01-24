@@ -6,6 +6,4 @@
     <node pkg="$(arg project)" type="$(arg project)_imageProjection"     name="$(arg project)_imageProjection"      output="screen"     respawn="true"/>
     <node pkg="$(arg project)" type="$(arg project)_featureExtraction"   name="$(arg project)_featureExtraction"    output="screen"     respawn="true"/>
     <node pkg="$(arg project)" type="$(arg project)_globalLocalize"      name="$(arg project)_mapOptmization"       output="screen"     respawn="true"/>
-    <node pkg="$(arg project)" type="republish_imu"                      name="republish_imu"       output="screen"     respawn="true"/>
-    <node pkg="$(arg project)" type="republish_gps"                      name="republish_gps"       output="screen"     respawn="true"/>
 </launch>

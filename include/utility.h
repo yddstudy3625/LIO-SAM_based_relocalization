@@ -11,7 +11,7 @@
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 
-#include <opencv/cv.h>
+#include <opencv2/imgproc.hpp>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>

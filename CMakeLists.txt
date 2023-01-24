@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(lio_sam)
 
 set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_CXX_FLAGS "-std=c++11")
+set(CMAKE_CXX_FLAGS "-std=c++14")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -pthread")
 
 find_package(catkin REQUIRED COMPONENTS
@@ -24,6 +24,7 @@ find_package(OpenMP REQUIRED)
 find_package(PCL REQUIRED QUIET)
 find_package(OpenCV REQUIRED QUIET)
 find_package(GTSAM REQUIRED QUIET)
+find_package(Boost REQUIRED COMPONENTS timer thread serialization chrono)
 
 add_message_files(
   DIRECTORY msg
@@ -98,3 +99,10 @@ add_executable(${PROJECT_NAME}_globalLocalize src/globalLocalize.cpp)
 add_dependencies(${PROJECT_NAME}_globalLocalize ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 target_compile_options(${PROJECT_NAME}_globalLocalize PRIVATE ${OpenMP_CXX_FLAGS})
 target_link_libraries(${PROJECT_NAME}_globalLocalize ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} gtsam)
+
+#GPS imu Republish
+add_executable(republish_imu src/republish_imu.cpp)
+target_link_libraries(republish_imu ${catkin_LIBRARIES})
+
+add_executable(republish_gps src/republish_gps_node.cpp)
+target_link_libraries(republish_gps ${catkin_LIBRARIES})

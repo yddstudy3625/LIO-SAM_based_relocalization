@@ -151,6 +151,7 @@ public:
 
     bool aLoopIsClosed = false;
     int imuPreintegrationResetId = 0;
+    int init_mode = 2; // 1 高精车数据  2 运营车数据
 
     nav_msgs::Path globalPath;
 
@@ -375,7 +376,9 @@ public:
 
     void gpsHandler(const nav_msgs::Odometry::ConstPtr& gpsMsg)
     {
+        mtx_general.lock();
         gpsQueue.push_back(*gpsMsg);
+        mtx_general.unlock();
     }
 
     void pointAssociateToMap(PointType const * const pi, PointType * const po)
@@ -1319,7 +1322,7 @@ public:
                 double t_start = ros::Time::now().toSec();
                 ICPscanMatchGlobal();
                 double t_end = ros::Time::now().toSec();
-                //std::cout << "ICP time consuming: " << t_end-t_start;
+                std::cout << "ICP time consuming: " << t_end-t_start;
                 
             }
 
@@ -1337,6 +1340,48 @@ public:
         mtx_general.lock();
         *laserCloudIn += *cloudScanForInitialize;
         mtx_general.unlock();
+
+        if(1 == init_mode) {
+            /***  ydd add ***/
+            if (gpsQueue.empty()) { 
+                return;
+            }
+
+            while (!gpsQueue.empty()) {
+                // 把距离当前帧比较早的帧都抛弃
+                if (gpsQueue.front().header.stamp.toSec() < timeLaserInfoStamp.toSec() - 0.2) {
+                    // message too old
+                    std::cout << " gps message too old ...... " << std::endl;
+                    gpsQueue.pop_front();
+                }
+                // 比较晚就索性再等等lidar计算
+                else if (gpsQueue.front().header.stamp.toSec() > timeLaserInfoStamp.toSec() + 0.2) {
+                    // message too new
+                    std::cout << " gps message too new ...... " << std::endl;
+                    break;
+                } else {
+                    // 说明这个gps时间上距离当前帧已经比较近了,那就把这个数据取出来
+                    nav_msgs::Odometry thisGPS = gpsQueue.front();
+                    gpsQueue.pop_front();
+
+                    // GPS too noisy, skip
+                    float noise_x = thisGPS.pose.covariance[0];
+                    float noise_y = thisGPS.pose.covariance[7];
+                    float noise_z = thisGPS.pose.covariance[14];
+                    // 如果gps的置信度不高，也没有必要使用了
+                    if (noise_x > 2.0 || noise_y > 25.0) {
+                        std::cout << " noise_x:" << noise_x << ", noise_y:" << noise_y << std::endl;
+                        continue;
+                    }
+            
+                    initialpose_use_gps_odom(thisGPS);
+            
+                    break;
+                }
+            }
+            /**************/
+        }
+   
 
         //publishCloud(&fortest_publasercloudINWorld, laserCloudIn, timeLaserInfoStamp, "map");
 
@@ -1371,8 +1416,9 @@ public:
         icp.setInputTarget(cloudGlobalMapDS);
         pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
         icp.align(*unused_result, ndt.getFinalTransformation());
-        std::cout << "the pose before initializing is: x" << transformInTheWorld[3] << " y" << transformInTheWorld[4]
-                  << " z" << transformInTheWorld[5] <<std::endl;
+        std::cout << "the pose before initializing is: x: " << transformInTheWorld[3] << " y: " << transformInTheWorld[4]
+                  << " z: " << transformInTheWorld[5] << " roll: " << transformInTheWorld[0] << " pitch:" << transformInTheWorld[1]
+                  << " yaw: " << transformInTheWorld[2] << std::endl;
 	std::cout << "the pose in odom before initializing is: x" << tranformOdomToWorld[3] << " y" << tranformOdomToWorld[4]
                   << " z" << tranformOdomToWorld[5] <<std::endl;
         std::cout << "the icp score in initializing process is: " << icp.getFitnessScore() << std::endl;
@@ -1412,7 +1458,7 @@ public:
         publishCloud(&pubLaserCloudInWorld, unused_result, timeLaserInfoStamp, "map");
 	publishCloud(&pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, "map");
 
-        if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
+        if (icp.hasConverged() == false || icp.getFitnessScore() > 2.5) // historyKeyframeFitnessScore
         {
             initializedFlag = Initializing;
             std::cout << "Initializing Fail" << std::endl;
@@ -1564,6 +1610,59 @@ public:
 
     }
 
+    void initialpose_use_gps_odom(const nav_msgs::Odometry& pose_msg)
+    {
+        //first calculate global pose
+        //x-y-z
+        if(initializedFlag == Initialized)
+            return;
+
+        float x = pose_msg.pose.pose.position.x;
+        float y = pose_msg.pose.pose.position.y;
+        float z = pose_msg.pose.pose.position.z;
+
+        //roll-pitch-yaw
+        tf::Quaternion q_global;
+        double roll_global; double pitch_global; double yaw_global;
+
+        q_global.setX(pose_msg.pose.pose.orientation.x);
+        q_global.setY(pose_msg.pose.pose.orientation.y);
+        q_global.setZ(pose_msg.pose.pose.orientation.z);
+        q_global.setW(pose_msg.pose.pose.orientation.w);
+
+        tf::Matrix3x3(q_global).getRPY(roll_global, pitch_global, yaw_global);
+        //global transformation
+        transformInTheWorld[0] = roll_global;
+        transformInTheWorld[1] = pitch_global;
+        transformInTheWorld[2] = yaw_global;
+        transformInTheWorld[3] = x;
+        transformInTheWorld[4] = y;
+        transformInTheWorld[5] = z;
+        PointTypePose thisPose6DInWorld = trans2PointTypePose(transformInTheWorld);
+        Eigen::Affine3f T_thisPose6DInWorld = pclPointToAffine3f(thisPose6DInWorld);
+        //Odom transformation
+        PointTypePose thisPose6DInOdom = trans2PointTypePose(transformTobeMapped);
+        Eigen::Affine3f T_thisPose6DInOdom = pclPointToAffine3f(thisPose6DInOdom);
+        //transformation: Odom to Map
+        Eigen::Affine3f T_OdomToMap = T_thisPose6DInWorld * T_thisPose6DInOdom.inverse();
+        float delta_x, delta_y, delta_z, delta_roll, delta_pitch, delta_yaw;
+        pcl::getTranslationAndEulerAngles (T_OdomToMap, delta_x, delta_y, delta_z, delta_roll, delta_pitch, delta_yaw);
+
+        mtxtranformOdomToWorld.lock();
+        //keep for co-operate the initializing and lio, not useful for the present
+        tranformOdomToWorld[0] = delta_roll;
+        tranformOdomToWorld[1] = delta_pitch;
+        tranformOdomToWorld[2] = delta_yaw;
+        tranformOdomToWorld[3] = delta_x;
+        tranformOdomToWorld[4] = delta_y;
+        tranformOdomToWorld[5] = delta_z;
+
+        mtxtranformOdomToWorld.unlock();
+        initializedFlag = NonInitialized;
+
+        //globalLocalizeInitialiized = false;
+
+    }
 
     void initialpose_callback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& pose_msg)
     {
