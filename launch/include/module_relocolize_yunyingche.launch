@@ -6,4 +6,5 @@
     <node pkg="$(arg project)" type="$(arg project)_imageProjection"     name="$(arg project)_imageProjection"      output="screen"     respawn="true"/>
     <node pkg="$(arg project)" type="$(arg project)_featureExtraction"   name="$(arg project)_featureExtraction"    output="screen"     respawn="true"/>
     <node pkg="$(arg project)" type="$(arg project)_globalLocalize"      name="$(arg project)_mapOptmization"       output="screen"     respawn="true"/>
+    <node pkg="$(arg project)" type="publish_gpsOdom_useGpsImu"          name="publish_gpsOdom_useGpsImu"           output="screen"     respawn="true"/>
 </launch>

@@ -70,6 +70,8 @@ link_directories(
   ${GTSAM_LIBRARY_DIRS}
 )
 
+set(ALL_TARGET_LIBRARIES "")
+include(cmake/geographic.cmake)
 ###########
 ## Build ##
 ###########
@@ -106,3 +108,6 @@ target_link_libraries(republish_imu ${catkin_LIBRARIES})
 
 add_executable(republish_gps src/republish_gps_node.cpp)
 target_link_libraries(republish_gps ${catkin_LIBRARIES})
+
+add_executable(publish_gpsOdom_useGpsImu src/publish_gpsOdom_useGpsImu.cpp)
+target_link_libraries(publish_gpsOdom_useGpsImu ${catkin_LIBRARIES} ${ALL_TARGET_LIBRARIES})

@@ -151,7 +151,7 @@ public:
 
     bool aLoopIsClosed = false;
     int imuPreintegrationResetId = 0;
-    int init_mode = 2; // 1 高精车数据  2 运营车数据
+    int init_mode = 1; // 1 接收gps odom数据  2 接收 rviz 下发初始位姿
 
     nav_msgs::Path globalPath;
 
@@ -1458,7 +1458,7 @@ public:
         publishCloud(&pubLaserCloudInWorld, unused_result, timeLaserInfoStamp, "map");
 	publishCloud(&pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, "map");
 
-        if (icp.hasConverged() == false || icp.getFitnessScore() > 2.5) // historyKeyframeFitnessScore
+        if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore) // historyKeyframeFitnessScore
         {
             initializedFlag = Initializing;
             std::cout << "Initializing Fail" << std::endl;
